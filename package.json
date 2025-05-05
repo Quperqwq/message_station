@@ -1,0 +1,14 @@
+{
+  "name": "message_station",
+  "version": "1.0.0",
+  "description": "留言和通讯的解决方案",
+  "main": "app.mjs",
+  "scripts": {
+    "test": "ehco done"
+  },
+  "author": "QUPR",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
