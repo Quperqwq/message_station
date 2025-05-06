@@ -4,7 +4,8 @@
   "description": "留言和通讯的解决方案",
   "main": "app.mjs",
   "scripts": {
-    "test": "ehco done"
+    "test": "ehco done",
+    "start": "node app.mjs"
   },
   "author": "QUPR",
   "license": "ISC",
