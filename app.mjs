@@ -13,5 +13,7 @@ const httpd = new HttpApp({
     'use_auto_page': true
 })
 
+httpd.page('/', 'app.html')
+
 
 httpd.run()

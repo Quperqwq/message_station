@@ -4,12 +4,13 @@
   "description": "留言和通讯的解决方案",
   "main": "app.mjs",
   "scripts": {
-    "test": "ehco done",
+    "dev": "nodemon --watch website-common.mjs --watch ./app.mjs",
     "start": "node app.mjs"
   },
   "author": "QUPR",
   "license": "ISC",
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "nodemon": "^3.1.10"
   }
 }

@@ -1,17 +1,19 @@
-// Fork Of Project <maimaitools> [#2501072139#] 
+/* 
+Fork Of Project <maimaitools> [#2501072139#] 
+v: 250510
+*/
 
 import express from 'express'
 import Fs from 'fs'
 import Path from 'path'
 import crypto from 'crypto' 
-import { argv } from 'process'
 
 
 /**
  * @typedef {import('./types/wsc').ApiResBody} ApiResBody 响应到客户端的响应体
  * @typedef {import('./types/wsc').ApiReqBody} ApiReqBody 用户的请求内容
  */
-
+const _dirname = process.cwd()
 
 /**
  * 构建一个工具对象, 用于复用常见功能
@@ -28,6 +30,10 @@ class Tools {
     }
 
     constructor() {}
+
+
+
+    // -- FileSystem Method --
 
     /**
      * 获取目标路径状态的对象(fs.Stats)
@@ -57,40 +63,99 @@ class Tools {
     }
 
     /**
-     * 获取目录下的所有文件
-     * @param {string} path 目标路径
-     * @param {'path' | 'file_name' | 'file_name_no_ext'} [style='path'] 获取样式
+     * 获取目录下的所有文件名或路径
+     * @param {string} path 读取目标的路径
+     * @param {'path' | 'name' | 'name_no_ext'} [type='path'] 获取类型
      */
-    readDir(path, style = 'path', full_path = false) {
-        /**
-         * 自动设置样式
+    readDir(path, type = 'path', full_path = false) {
+        
+        /** 输出目标样式
          * @param {string} path 
          * @param {string} filename 
          */
-        const setStyle = (path, filename) => {
-            switch (style) {
-                case 'path':
-                    return Path.join(path, filename)
-                case 'file_name':
-                    return Path.join(filename)
-                case 'file_name_no_ext':
-                    return Path.basename(filename, Path.extname(filename))
-                default:
-                    return Path.join(path, filename)
+        const output = (() => {
+            const defaultMethod = (path, filename) => {
+                return Path.join(path, filename)
             }
-        }
+            
+            const method = {
+                'path': defaultMethod,
+                'name': (_, filename) => {
+                    return  Path.join(filename)
+                },
+                'name_no_ext': (_, filename) => {
+                    return Path.basename(filename, Path.extname(filename))
+                }
+            }[type]
+            return method
+            // (path, filename) => {
+            //     switch (type) {
+            //         case 'path':
+            //             return Path.join(path, filename)
+            //         case 'name':
+            //             return Path.join(filename)
+            //         case 'name_no_ext':
+            //             return Path.basename(filename, Path.extname(filename))
+            //         default:
+            //             return Path.join(path, filename)
+            //     }
+            // }
+        })() 
+        
+        // 判断是否合法
         if (!this.isDir(path)) {
             return new Error('invalid_path')
         }
         /**@type {string[]} */
         let result = []
-        // ~(!)这种写法可能会出现错误
-        Fs.readdirSync(path).forEach((filename) => {
-            result.push(setStyle(path, filename))
-        })
+
+        try {
+            Fs.readdirSync(path).forEach((filename) => {
+                result.push(output(path, filename))
+            })
+        } catch (error) {
+            return new Error('read_dir_failed')
+        }
+
         return full_path ? result.map((p) => {
-            return Path.join(process.cwd(), path, p)
+            return Path.join(_dirname, path, p)
         }) : result
+    }
+
+    /**
+     * 获取目录下的所有路径或文件列表
+     * @param {string} path 目标路径
+     * @param {boolean} is_file 是否获取位当前路径下的文件, 如果不是, 那么获取为目录列表
+     * @returns 
+     */
+    readDirAs(path, is_file) {
+        /**@type {string[]} */
+        const result = []
+        const file_list = this.readDir(path)
+        if (file_list instanceof Error) return result
+
+        file_list.forEach((file_path) => {
+            const file_stat = this.fileStat(file_path)
+            if (!file_stat) return
+            if (this.xor(file_stat.isFile(), is_file)) result.push(file_path)
+        })
+        return result
+    }
+
+    /**
+     * (`this.readDirAs`)读取路径下的文件
+     * @param {string} path 
+     */
+    readDirFile(path) {
+        return this.readDirAs(path, true)
+    }
+
+    /**
+     * (`this.readDirAs`)读取路径下的路径
+     * @param {string} path 
+     */
+    readDirPath(path) {
+        return this.readDirAs(path, false)
     }
 
     /**
@@ -136,6 +201,10 @@ class Tools {
         }
     }
 
+
+
+    // -- Logic Method --
+
     /**
      * 获取一个值的类型
      * @param {any} value 
@@ -171,6 +240,19 @@ class Tools {
         const type_of = this.typeOf(value)
         return types.includes(type_of)
     }
+
+    /**
+     * 异或门
+     * @param {any} a 逻辑a
+     * @param {any} b 逻辑b
+     */
+    xor(a, b) {
+        return !((a || b) && !(a && b))
+    }
+
+
+
+    // -- string --
 
     /**
      * 获取可读的日期字符串 ~(FIX)需要做性能优化
@@ -229,24 +311,6 @@ class Tools {
         return pad(time)
     }
 
-    
-    /**
-     * 对于一个不信任的值(如用户传入值), 确保一个值类型有效符合预期
-     * @param {any} value 需要确认的值
-     * @param {string} value_type 该值应该的类型
-     * @param {any} normal 若不是此类型指定为默认值
-     */
-    valid(value, value_type, normal) {
-        const type = value_type.toLowerCase()
-        if (typeof(value) === type) return value
-        if (type === 'array') return Array.isArray(value) ? value : normal
-
-        return normal
-    }
-
-
-    // 字符串处理
-
     /**
      * (string.prototype.split())切片一个字符串, 最后一个切片内容是剩余内容
      * @param {string} cont 需要切片的字符串 
@@ -290,6 +354,24 @@ class Tools {
     get time() {
         return Math.floor(new Date().getTime() / 1000)
     }
+
+
+    // -- value --
+    
+    /**
+     * 对于一个不信任的值(如用户传入值), 确保一个值类型有效符合预期
+     * @param {any} value 需要确认的值
+     * @param {string} value_type 该值应该的类型
+     * @param {any} normal 若不是此类型指定为默认值
+     */
+    valid(value, value_type, normal) {
+        const type = value_type.toLowerCase()
+        if (typeof(value) === type) return value
+        if (type === 'array') return Array.isArray(value) ? value : normal
+
+        return normal
+    }
+
 }
 
 /**
@@ -328,6 +410,9 @@ class OutputLog {
         }
     }
 
+    /**输出宽度 */
+    console_width = 10
+
     /**
      * 
      * @param {Object} param0
@@ -359,7 +444,7 @@ class OutputLog {
     /**
      * 输出日志
      * @param {string} content 输出日志内容
-     * @param {number} level 输出日志等级(特殊地, `level: -1`表示输出地是访问日志)
+     * @param {number | string} level 输出日志等级(特殊地, `level: -1`表示输出地是访问日志)
      * 
      * @returns {string} 待打印的内容
      */
@@ -369,18 +454,15 @@ class OutputLog {
         let header = ''
         header += `[${level_obj.name ? level_obj.name : 'unknown'}] `
         if (this.use_date) {
-            // 241110前的写法, 一条日志一行
-            // header += `${tool.getDate()} |`
-            // 241110后的写法, 一小时打印一次日期
             const _date = new Date()
             const date = tool.getDate('to_hours', _date)
             const time = tool.getDate('day_minutes', _date)
             let hours = tool.getDate('hours', _date)
+            const t_token = `${date}:${hours}`
             
-            // ~(FIX)这种写法有少数情况不会触发函数
-            if (OutputLog._next_log_hours !== hours) {
-                OutputLog._next_log_hours = hours
-                console.log(`\n      ${date} ⤵`)
+            if (OutputLog._next_log_hours !== t_token) {
+                OutputLog._next_log_hours = t_token
+                console.log(`\n --- ${date} ---`)
             }
             header += `${time} |`
         }
@@ -406,6 +488,10 @@ class OutputLog {
     warn(...cont) { this.output(cont.join(' '), 2) }
     info(...cont) { this.output(cont.join(' '), 1) }
     debug(...cont) { this.output(cont.join(' '), 0) }
+    hr(cont = '_') {
+        const len = cont.length
+        this.print(cont.repeat(Math.floor(this.console_width / len)))
+    }
     /**
      * 在控制台打印一个请求信息
      * @param {Request} req 
@@ -422,7 +508,7 @@ class OutputLog {
      * 在控制台打印更多信息
      */
     det(cont = '') {
-        console.log('    ↪', cont)
+        console.log('    |-', cont)
     }
 }
 
@@ -481,10 +567,12 @@ export class HttpApp {
         /**静态目录在文件系统位置 */
         this.path_static = static_path
 
-        /**API方法 @type {{[x: string]: ApiProcCallback}} */
+
+        
+        /**API方法注册事件 @type {{[x: string]: ApiProcCallback}} */
         this.api_method = {}
 
-        // 打印请求内容
+        // 打印请求内容中间件
         if (print_req) {
             app.use((req, _, next) => {
                 log.req(req)
@@ -515,19 +603,31 @@ export class HttpApp {
          */
         this.cont_html = {}
         /**
+         * HTML文件列表
+         * @type {string[]}
+         */
+        this.list_html = []
+        /**
          * 模板文件会缓存为这个对象
          * @type {cacheObj}
          */
         this.cont_template = {}
 
-        if (use_cache_file) { // 但有时也无需缓存
+        /**
+         * 模板列表
+         * @type {string[]}
+         */
+        this.list_template = []
+
+        if (use_cache_file) { 
             /**
-             * 缓存到对象
+             * 将文件缓存到对象
              * @param {string} path 
              * @param {object} target 
+             * @param {Array} list 
              */
-            const cache = (path, target) => {
-                const file_list = tool.readDir(path)
+            const cache = (path, target, list = []) => {
+                const file_list = tool.readDirFile(path)
                 if (file_list instanceof Error) {
                     throw log.error(`invalid_path: ${html_path}`)
                 }
@@ -535,14 +635,18 @@ export class HttpApp {
                     // 匹配文件扩展名是否是HTML文件
                     // log.debug(path_name)
                     if (['.html', '.htm'].includes(Path.extname(path_name))) {
+                        // 是合法的文件名
                         const filename = Path.basename(path_name)
                         target[filename] = tool.readFileToStr(path_name)
+                        list.push(filename) // 添加到文件列表
                     }
                 })
             }
-            cache(html_path, this.cont_html)
-            cache(template_path, this.cont_template)
+            cache(html_path, this.cont_html, this.list_html)
+            cache(template_path, this.cont_template, this.list_template)
 
+        } else { // 但有时使用者也无需缓存
+            // ~(fork of no cache)
         }
 
         
@@ -584,10 +688,11 @@ export class HttpApp {
             execute(req_body, res_body, endReq)
         })
 
-        // 自动输出
+        // 自动映射页面路由
         if (use_auto_page) {
             // ~(last)
-            console.log(tool.readDir(this.path_html, 'file_name', true))
+            console.log(tool.readDir(this.path_html, 'name_no_ext'))
+            
             
         }
 
@@ -675,7 +780,7 @@ export class HttpApp {
         expressApp.get(path, (_, res) => {
             let content = ''
                 
-            content = this.readHtml(html_name)
+            content = this.readHtml({filename: html_name})
             if (!content) {
                 log.error('file', html_name, 'not found.')
                 return res.status(500).send('Server Error! File Not Found.').end()
@@ -706,11 +811,16 @@ export class HttpApp {
 
     /**
      * 读取一个HTML文件的内容(在`this.path_html`中), 并按照规则替换`<REPLACE>`的内容
-     * @param {string} filename HTML文件名
-     * @param {boolean} [is_template=false] 是模板文件目录下的html文件
+     * @param {Object} param0
+     * @param {string} param0.filename HTML文件名
+     * @param {boolean} [param0.is_template=false] 为模板文件, 将映射为模板目录下的文件并不进行渲染
+     * @param {Request} [param0.request] 当前会话的Request对象
+     * @param {Object} param0.self_keyword 自定义模板字符串内关键字
      */
-    readHtml(filename, is_template = false) {
+    readHtml({filename, is_template = false, request = {}, self_keyword = {}}) {
         const {path_html, path_template} = this
+        // log.debug('readHtml in arg of', filename) // ~(fix)in arg is ok
+        
 
         /**
          * 生成一个可用于表示DOM的注释内容元素以用于标记
@@ -720,12 +830,31 @@ export class HttpApp {
             return `<!-- [render] ${cont.join('')} -->`
         }
 
+        // 模板字符串内关键字(权重:0)
+        const keyword = {
+            path: request.url
+        }
+
 
         /**预渲染HTML文件 @param {string} cont */
         const render = (cont) => {
-            // ~(?)这里以后可以做性能优化
+            // -- func --
+
+            /**
+             * 替换标签为指定内容
+             * @param {string} org_text 原始内容
+             * @param {(tag_cont: string) => string} handler 处理标签内容函数
+             */
+            const replaceTag = (org_text, handler) => {
+                let result = org_text
+                return result.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, args) => {
+                    return handler(args)
+                })
+            }
+
+            // -- exec --
             /**模板列表 */
-            const list = tool.readDir(path_template, 'file_name_no_ext')
+            const list = tool.readDir(path_template, 'name_no_ext')
             if (list instanceof Error) return ''
             cont = cont.replace(/* 特别注意: 此正则表达式由AI生成 */ /(?<!\\)<#(.*?)(?<!\\)>/g, (_, tag_cont) => {
                 // <#template_name:          { key: value }>
@@ -738,29 +867,48 @@ export class HttpApp {
                 //              ^ 待替换的值会
                 //         在渲染的时候根据参数传递
 
-                const split = tool.splitStr
+                /* ref */const split = tool.splitStr
                 // 预处理标签内容
                 const args = split(tag_cont, ':', 2) // 获取参数
                 const template_name = args[0].trim()
 
-                /**传递的模板参数 @type {Object.<string, any>} */let template_params
+                /**传递的模板参数 (权重:1) @type {Object.<string, any>} */let template_params = {}
                 try { // 尝试解析JSON内容
                     template_params = JSON.parse(args[1])
-                } catch (e) {
-                    template_params = {}
+                } catch (e) { }
+
+                // 将渲染的keyword
+                const params = {
+                    ...self_keyword,
+                    ...template_params,
+                    ...keyword
                 }
                 
                 // 模板读取
                 if (!list.includes(template_name)) return '' // 如果没有该模板
                 const target = template_name + '.html'
-                let result = this.readHtml(target, true)
+                let result = this.readHtml({filename: target, is_template: true})
 
                 // 模板参数传递
-                result = result.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, args) => {
+                // result = result.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, args) => {
+                //     const param = split(args, '=', 2)
+                //     const key = param[0].trim()
+                //     const normal = param[1]
+                //     const cont = template_params[key]
+
+                //     return `${
+                //         cont === void 0 ?
+                //             typeof(normal) === 'string' ? normal.trim() : ''
+                //         : cont
+                //     }`
+                // })
+
+                // (!) 特别注意, 迁移实现的这个方法因常识性错误debug了几天(虚)才发现问题, 请更改新的实现方式的时候多加注意
+                result = replaceTag(result, (args) => {
                     const param = split(args, '=', 2)
                     const key = param[0].trim()
                     const normal = param[1]
-                    const cont = template_params[key]
+                    const cont = params[key]
 
                     return `${
                         cont === void 0 ?
@@ -768,6 +916,7 @@ export class HttpApp {
                         : cont
                     }`
                 })
+                
                 
 
                 // 输出
@@ -777,6 +926,7 @@ export class HttpApp {
                     makeNote(template_name, ':end')
                 ].join('')
             })
+            // log.debug('result cont of:', cont)
             return cont
         }
 
@@ -787,6 +937,7 @@ export class HttpApp {
             // 有缓存的情况
             const target = is_template ? this.cont_template : this.cont_html
             content = target[filename]
+            
             if (!content) return ''
         } else {
             // 无缓存的情况
@@ -797,6 +948,7 @@ export class HttpApp {
         }
 
         if (!is_template) {// 预渲染非模板文件的HTML文件
+            // ~(fix)
             return render(content)
         }
 
@@ -813,7 +965,7 @@ export class HttpApp {
             // ~(TAG)404 page
             log.det('not fond')
             res.status(404)
-            res.send(this.readHtml('404.html'))
+            res.send(this.readHtml({filename: '404.html', request: req}))
         })
 
 
@@ -841,3 +993,4 @@ export const log = new OutputLog({
 
 // log.warn(Path.join(process.cwd(), '../src/html'))
 
+// log.debug(tool.xor(0, 1))
