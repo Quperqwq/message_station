@@ -5,7 +5,8 @@
   "main": "app.mjs",
   "scripts": {
     "dev": "nodemon --watch website-common.mjs --watch ./app.mjs",
-    "start": "node app.mjs"
+    "start": "node app.mjs",
+    "test": "node test.mjs"
   },
   "author": "QUPR",
   "license": "ISC",

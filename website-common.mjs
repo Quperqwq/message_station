@@ -4,154 +4,14 @@ v: 250521
 */
 
 import express from 'express'
-import Fs from 'fs'
 import Path from 'path'
-import tool from './tools-common.mjs';
-
+import {tool} from './tools-common.mjs'
+import log from './console-common.mjs'
 
 /**
  * @typedef {import('./types/wsc').ApiResBody} ApiResBody 响应到客户端的响应体
  * @typedef {import('./types/wsc').ApiReqBody} ApiReqBody 用户的请求内容
  */
-const _dirname = process.cwd()
-
-/**
- * 构建一个输出日志类, 用于将日志信息输出到控制台或日志文件
- */
-class OutputLog {
-    /**
-     * 日志等级对象
-     * @type {{[x: number | string]: {name: string, color: string, out: function(string): void}}}
-     */
-    level = {
-        3: {
-            name: 'ERROR',
-            color: '',
-            out: (c) => { console.error(c) }
-        },
-        2: {
-            name: 'WARN',
-            color: '',
-            out: (c) => { console.warn(c) }
-        },
-        1: {
-            name: 'INFO',
-            color: '',
-            out: (c) => { console.info(c) }
-        },
-        0: {
-            name: 'DEBUG',
-            color: '',
-            out: (c) => { console.debug(c) }
-        },
-        'req': {
-            name: 'Request',
-            color: '',
-            out: (c) => { console.log(c) }
-        }
-    }
-
-    /**输出宽度 */
-    console_width = 10
-
-    /**
-     * 
-     * @param {Object} param0
-     * @param {boolean} param0.use_color_code 当启用, 将日志内容打印在控制台时会进行颜色渲染
-     * @param {boolean} param0.use_date_output 当启用, 将在打印日志的同时显示打印时间
-     * @param {boolean} param0.write_log_file 当启用, 会将日志内容写入进日志文件
-     * @param {number} param0.write_level 设置写入日志文件最低等级
-     * @param {number} param0.show_level 设置输出的日志最低等级
-     * @param {string} param0.log_path 设置输出日志的路径
-     */
-    constructor({use_color_code = true, use_date_output = true, write_log_file = true, show_level = 0, write_level = 2, log_path = './log'}) {
-        if (!tool.isDir(log_path)) {
-            // 这里无需catch
-            Fs.mkdirSync(log_path)
-        }
-        this.use_color = use_color_code
-        this.use_date = use_date_output
-        this.use_write = write_log_file
-        this.log_path = log_path
-
-        this.level_log = show_level
-        this.level_write = write_level
-
-        // 为便打印日志使用
-        OutputLog._next_log_hours = -1
-    }
-
-
-    /**
-     * 输出日志
-     * @param {string} content 输出日志内容
-     * @param {number | string} level 输出日志等级(特殊地, `level: -1`表示输出地是访问日志)
-     * 
-     * @returns {string} 待打印的内容
-     */
-    output(content, level) {
-        // ~(ADD)待完全实现
-        const level_obj = level === -1 ? this.level['req'] : this.level[level]
-        let header = ''
-        header += `[${level_obj.name ? level_obj.name : 'unknown'}] `
-        if (this.use_date) {
-            const _date = new Date()
-            const date = tool.getDate('to_hours', _date)
-            const time = tool.getDate('day_minutes', _date)
-            let hours = tool.getDate('hours', _date)
-            const t_token = `${date}:${hours}`
-            
-            if (OutputLog._next_log_hours !== t_token) {
-                OutputLog._next_log_hours = t_token
-                console.log(`\n --- ${date} ---`)
-            }
-            header += `${time} |`
-        }
-        const text = `${header} ${content}`
-        if (level_obj) {
-            level_obj.out(text)
-        }
-
-
-        if (this.use_write && level >= this.level_write) {
-            // ~(ADD)目标格式 log_path[ <date>.log, ... ]
-            // ~(TAG)日志文件写入
-            // ~(TEMP)
-            tool.writeFile(Path.join(this.log_path, 'running.log'), text + '\n', true)
-        }
-
-    }
-
-    error(...cont) {
-        this.output(cont.join(' '), 3)
-        return new Error(cont)
-    }
-    warn(...cont) { this.output(cont.join(' '), 2) }
-    info(...cont) { this.output(cont.join(' '), 1) }
-    debug(...cont) { this.output(cont.join(' '), 0) }
-    hr(cont = '_') {
-        const len = cont.length
-        this.print(cont.repeat(Math.floor(this.console_width / len)))
-    }
-    /**
-     * 在控制台打印一个请求信息
-     * @param {Request} req 
-     */
-    req(req) {
-        let cont = `${req.method} ${req.path}`
-        this.output(cont, -1)
-    }
-    print(...cont) {
-        console.log(...cont)
-    }
-
-    /**
-     * 在控制台打印更多信息
-     */
-    det(cont = '') {
-        console.log('    |-', cont)
-    }
-}
 
 /**
  * 构建一个HTTP服务
@@ -346,6 +206,7 @@ export class HttpApp {
         const sYN = (is_yes) => { return is_yes ? 'Yes' : 'No' }
         // 输出队列
         [
+            'Hello QUPR HTTP Server!',
             `Cache Mode: ${sYN(use_cache_file)}`,
             `Auto Page: ${sYN(use_auto_page)}`,
         ].forEach((message) => {
@@ -400,7 +261,7 @@ export class HttpApp {
     //
 
     /**
-     * 新建一个路由处理器
+     * 新建(注册)一个路由处理器
      * @param {string} path 
      * @param {function(Request, Response)} callback 
      */
@@ -411,7 +272,7 @@ export class HttpApp {
     }
 
     /**
-     * 新建一个路由以返回前端页面
+     * 新建(注册)一个路由以返回前端页面
      * @param {string} path 
      * @param {string} html_name 
      */ 
@@ -431,7 +292,7 @@ export class HttpApp {
     }
 
     /**
-     * 新建一个API处理项
+     * 新建(注册)一个API处理项
      * 
      * 在APP上使用 `POST /api <DATA>(Object)`来调用
      * @param {string} target 表示当使用POST请求时请求体target值为何时触发指定函数
@@ -603,11 +464,12 @@ export class HttpApp {
         // 未匹配到路由 
         expressApp.use((req, res) => {
             // ~(TAG)404 page
-            log.det('not fond')
             res.status(404)
-            res.send(this.readHtml({filename: '404.html', request: req}))
+            if (req.method === 'GET') {
+                log.det('not fond')
+                res.send(this.readHtml({filename: '404.html', request: req}))
+            }
         })
-
 
 
         const server = expressApp.listen(this.port, this.host, () => {
@@ -618,10 +480,6 @@ export class HttpApp {
     }
 }
 
-export const log = new OutputLog({
-    // 设置日志输出功能
-    show_level: 0
-})
 
 
 
@@ -633,3 +491,4 @@ export const log = new OutputLog({
 // log.warn(Path.join(process.cwd(), '../src/html'))
 
 // log.debug(tool.xor(0, 1))
+log.req('test')

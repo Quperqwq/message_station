@@ -1,5 +1,7 @@
-import {tool, HttpApp, log} from './website-common.mjs'
-
+import {HttpApp} from './website-common.mjs'
+import {tool} from './tools-common.mjs'
+import {UserConfig} from './user-common.mjs'
+import log from './console-common.mjs'
 
 // ------ server area ------
 const config = {
@@ -12,7 +14,8 @@ const httpd = new HttpApp({
     'static_rout': '/',
     'template_path': './src/html/template',
     'html_path': './src/html',
-    'use_auto_page': true
+    'use_auto_page': true,
+    'use_cache_file': false,
 })
 
 class Server {
@@ -26,6 +29,10 @@ class Server {
      * @param {number} param1.server_loop_cycle 服务器循环周期(毫秒)
      */
     constructor(httpd, {connect_timeout = 30, max_online_user = 0, user_profile_file = './users.json', server_loop_cycle = 100}) {
+        // init value
+        /**随机种子.@type {string} */
+        this.session_random_seed = `${tool.time}`
+
         this.online_users = {}
         this.config = {
             connect_timeout,
@@ -52,22 +59,40 @@ class Server {
 
         this.httpd = httpd
 
-        httpd.api('heart', (req, res) => {
+        httpd.api('online', (req, res) => {
 
         })
 
         this.state.init = true
     }
 
+    out(...cont) {
+        log.print('<Server>', ...cont)
+        
+    }
+    /**
+     * 创建一个全局唯一的会话ID
+     * @param {number} [uid=0] 用户ID, 默认为0
+     * @return {string} 返回会话ID
+     **/
     createSession(uid = 0) {
-        return tool.strToMd5HashValue(uid, tool.time)
+        this.session_random_seed = tool.strToMd5HashValue(uid, tool.time)
+        return this.session_random_seed
     }
 
     run() {
         const {state, config} = this
         state.interval_index = setInterval(() => {
-            // once cycle
-            
+            try {
+                // Server Main Loop / once cycle
+                // 
+                // ~(TAG)服务器心跳包主循环
+            } catch (error) {
+                state.running = false
+                state.interval_index = null
+                log.error('服务器主循环发生错误:', error)
+                return
+            }
         }, config.server_loop_cycle)
 
         state.running = true
@@ -86,3 +111,7 @@ httpd.page('/', 'app.html')
 
 
 httpd.run()
+
+
+// ------ test code ------
+// const user_config = new UserConfig()

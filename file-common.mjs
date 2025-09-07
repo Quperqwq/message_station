@@ -1,30 +1,45 @@
 import Fs from 'fs'
+import log from './console-common.mjs'
 import Path from 'path'
 
 export class JSONData {
     /**
      * 
-     * @param {string} path JSON文件路径
+     * @param {string | string[]} file_path JSON文件路径
      * @param {Object} param1 
      * @param {boolean} [param1.mute_log=true] 是否不输出日志
      * @param {string} [param1.encoding='utf-8'] 指定编码格式
+     * @param { () => void } [param1.on_reset] 当重置时触发回调
+     * @param {Object} [param1.default_data] 数据体的默认值, 当值不可用或文件不存在时设定为该值
      */
-    constructor(path, {mute_log = false, encoding = 'utf-8'} = {}) {
-        this.path = path
+    constructor(file_path, {mute_log = false, encoding = 'utf-8', default_data = {}, on_reset} = {}) {
+        this.path = Array.isArray(file_path) ? Path.join(...file_path) : file_path // 将传入的path(对象的存储路径)归一化
         this._cache = null
         this._valid = false
         this.encoding = encoding
-        this._log_header = '[JSONData]'
+        this._log_header = `<JSONData '${file_path}'>`
+        this.default_data = typeof(default_data) === 'object' ? default_data : null
+        const callbacks = {
+            reset: on_reset
+        }
+        /**
+         * 触发回调函数
+         * @param {string} callback_name 函数名
+         */
+        this._on = (callback_name = '', ...args) => {
+            const callback = callbacks[callback_name]
+            if (typeof(callback) === 'function') callback(...args)
+        }
 
         const output = {
             error: (...cont) => {
-                console.error(this._log_header, ...cont)
+                log.error(this._log_header, ...cont)
             },
             log: (...cont) => {
-                console.log(this._log_header, ...cont)
+                log.info(this._log_header, ...cont)
             },
             debug: (...cont) => {
-                console.debug(this._log_header, ...cont)
+                log.debug(this._log_header, ...cont)
             }
         }
 
@@ -45,19 +60,39 @@ export class JSONData {
         }
     }
 
-    
+    setDefault(default_data = this.default_data) {
+        this._on('reset')
+        this.set(default_data)
+    }
 
     /**强制获取JSON对象 */
     get() {
+        const {default_data, encoding} = this
         this.out.debug('data from file.')
         try {
             return JSON.parse(Fs.readFileSync(this.path, {
-                encoding: this.encoding
+                encoding
             }))
         } catch (e) {
+            if (default_data) { // 获取失败时重置
+                this.setDefault()
+            }
             this.out.error('get fail, error message of:', e)
-            return null
+            return default_data
         }
+    }
+
+    set(data) {
+        try {
+            Fs.writeFileSync(this.path, JSON.stringify(data), {
+                encoding: this.encoding
+            })
+            return true
+        } catch (e) {
+            this.out.log('write fail, error message of:', e)
+            return false
+        }
+
     }
 
     get data() {
@@ -72,13 +107,7 @@ export class JSONData {
     }
 
     set data(cont) {
-        try {
-            Fs.writeFileSync(this.path, JSON.stringify(cont), {
-                encoding: this.encoding
-            })
-        } catch (e) {
-            this.out.log('write fail, error message of:', e)
-        }
+        this.set(cont)
     }
 }
 
