@@ -10,15 +10,17 @@ class Timer {
          * @type {{[x: string]: number}}
          */
         this.labels = time_labels
+        /**当前计时器列表默认的索引值 */
+        this.index = 10000
     }
 
     /**
      * 开始一个计时器
-     * @param {string} label 计时器标签
+     * @param {string} [label] 计时器标签
      */
-    start(label = '') {
+    start(label = String(++this.index)) {
         this.labels[label] = performance.now()
-        return
+        return label
     }
 
     /**
@@ -26,12 +28,12 @@ class Timer {
      * @param {string} label 计时器标签
      */
     end(label = '') {
-        let time_of = performance.now()
+        let now = performance.now()
         const start_time = this.labels[label]
         if (start_time === undefined) return NaN
-        time_of -= start_time
+        now -= start_time
         delete this.labels[label]
-        return time_of
+        return now
     }
 }
 

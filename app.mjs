@@ -1,7 +1,7 @@
 import {HttpApp} from './website-common.mjs'
 import {tool} from './tools-common.mjs'
 import {UserConfig} from './user-common.mjs'
-import log from './console-common.mjs'
+import {log} from './console-common.mjs'
 
 // ------ server area ------
 const config = {
@@ -16,6 +16,10 @@ const httpd = new HttpApp({
     'html_path': './src/html',
     'use_auto_page': true,
     'use_cache_file': false,
+    // 'delay_start_s': 5,
+    'render_mapping_context': {
+        version: 'dev-251226'
+    }
 })
 
 class Server {
@@ -87,6 +91,7 @@ class Server {
                 // Server Main Loop / once cycle
                 // 
                 // ~(TAG)服务器心跳包主循环
+
             } catch (error) {
                 state.running = false
                 state.interval_index = null
@@ -109,9 +114,11 @@ class Server {
 
 httpd.page('/', 'app.html')
 
+httpd.page('/dev', 'dev.html')
+
+httpd.page('/status/404', '404.html')
 
 httpd.run()
-
 
 // ------ test code ------
 // const user_config = new UserConfig()

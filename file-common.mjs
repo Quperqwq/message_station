@@ -1,5 +1,5 @@
 import Fs from 'fs'
-import log from './console-common.mjs'
+import {log} from './console-common.mjs'
 import Path from 'path'
 
 export class JSONData {

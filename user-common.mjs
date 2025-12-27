@@ -1,7 +1,7 @@
 import { JSONData } from './file-common.mjs'
 import Path from 'path'
 import {tool} from './tools-common.mjs'
-import log from './console-common.mjs'
+import {log} from './console-common.mjs'
 
 /**模块的配置信息 */
 const module_config = {

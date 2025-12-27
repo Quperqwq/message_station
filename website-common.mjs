@@ -6,7 +6,12 @@ v: 250521
 import express from 'express'
 import Path from 'path'
 import {tool} from './tools-common.mjs'
-import log from './console-common.mjs'
+import {log} from './console-common.mjs'
+
+
+const global = {
+    version: '251228',
+}
 
 /**
  * @typedef {import('./types/wsc').ApiResBody} ApiResBody 响应到客户端的响应体
@@ -33,6 +38,9 @@ export class HttpApp {
      * @param {boolean} param0.print_req 打印访问日志
      * @param {boolean} param0.use_cache_file 使用缓存文件以提高性能
      * @param {boolean} param0.use_auto_page 自动映射HTML文件到路由路径
+     * @param {Object} param0.render_mapping_context 渲染HTML(`this.render`)时关键字映射上下文
+     * @param {number} param0.delay_start_ms 延迟web服务器启动时间(毫秒)
+     * @param {number} param0.delay_start_s 延迟web服务器启动时间(秒); 当设置了 `delay_start_ms` 参数时, `delay_start_s` 将不再可用
      */
     constructor({
         host = '0.0.0.0',
@@ -44,6 +52,9 @@ export class HttpApp {
         print_req = true,
         use_cache_file = true,
         use_auto_page = true,
+        render_mapping_context = {},
+        delay_start_ms = 0, // 延迟启动时间(毫秒)
+        delay_start_s = 0, // 延迟启动时间(秒)
     }) {
         const app = express()
 
@@ -56,10 +67,18 @@ export class HttpApp {
         /**Express实例对象 */
         this.expressApp = app
 
+        /**运行中服务器的实例 */
+        this.server = null
+
         /**HTTP服务目标监听端口 */
         this.port = port
         /**HTTP服务目标监听Host */
         this.host = host
+
+        
+        /**web服务器延迟启动时间(ms) */
+        this.delay_start = delay_start_ms || delay_start_s * 1000
+
 
         /**HTML目录在文件系统位置 */
         this.path_html = html_path
@@ -68,10 +87,17 @@ export class HttpApp {
         /**静态目录在文件系统位置 */
         this.path_static = static_path
 
+        
+        // ~(last)预设参数: 生成时间;
+        /**keyword映射上下文 */
+        this.render_mapping_context = render_mapping_context
+
 
         
         /**API方法注册事件 @type {{[x: string]: ApiProcCallback}} */
         this.api_method = {}
+
+
 
         // 打印请求内容中间件
         if (print_req) {
@@ -275,13 +301,14 @@ export class HttpApp {
      * 新建(注册)一个路由以返回前端页面
      * @param {string} path 
      * @param {string} html_name 
+     * @param {null | Object} [keywords_map=null] 需要渲染到网页的属性值
      */ 
-    page(path, html_name) {
+    page(path, html_name, keywords_map = null) {
         const {expressApp} = this
         expressApp.get(path, (_, res) => {
             let content = ''
-                
-            content = this.readHtml({filename: html_name})
+            
+            content = this.readHtml({filename: html_name, self_keyword: keywords_map})
             if (!content) {
                 log.error('file', html_name, 'not found.')
                 return res.status(500).send('Server Error! File Not Found.').end()
@@ -310,6 +337,226 @@ export class HttpApp {
     //
 
 
+    /** 
+     * ~(last)
+     * 
+     * 注释与打印日志行为
+     * 
+     * ------
+     * 
+     * 优化
+     * 
+     * - 优化注释;
+     * 
+     * - 继续优化日志输出代码段;
+     * - -  file://./console-common.mjs
+     * - -  1.  LOG_LEVEL_DEBUG, LOG_LEVEL_WARN, ...
+     * - -  2.  result_levels 对象内容有冗余
+     * 
+     * - 优化引用Timer对象的方式;
+     * 
+     * 
+     * 增加
+     * 
+     * - 将日志输出的等级更改为多维度;
+     * - -      0 10 20 ... mod 10 => this level
+     * 
+     * - 详细输出debug日志并归组(type字段);
+     * - -  file://./console-common.mjs ~(TAG)指定type
+     * 
+     * - 输出日志时可选需要显示时哪个模块;
+     * - -      2025-12-28 00:25:29.481 ([filename]) [INFO] ...
+     * 
+     * 
+     * - render需要支持双花括号内对象内访问, 如 `` 来获取对应
+     * - -      {{ obj.keys }}    obj -map-> keys
+     * 
+     * 
+     * - tool对象内增加处理字符串指定长度并截取加省略号;
+     * - -      '123456789' -5-> '12345...'
+    */
+    /**
+     * 渲染HTML文件
+     * ```markdown
+     * <#`template-name`: `JSON-Text`>
+     *    ^^ 模板名      ^^ JSON字符串
+     * 例: <#profile: {username: "name", email: "xxx@xx.xx"}>
+
+     * 在模板文件中
+     * <element> {{ key = value }} </element>
+     *              ^
+     *     待替换的值会在渲染的时候根据参数传递
+     * 预处理标签内容
+     * ```
+     * @param {string} html_cont
+     * @typedef {{[key: string]: string}} TextMap 字符串映射表
+     */
+    render(html_cont, keywords_map) {
+        // -- init --
+
+        const {path_template, render_mapping_context} = this
+
+        const _t_start = tool.Timer.start()
+        log.debug('render start', )
+        /**全局映射表 */
+        const global_mapping = {
+            // 当权重小时, 相同的字段会被权重较大的覆盖
+            // -----------
+            // 权重 ↑小
+            create_time: tool.time,
+            render_version: global.version,
+            ...render_mapping_context, // 全局上下文
+
+            ...keywords_map,           // 调用函数传入的
+
+            // 权重 ↓大
+        }
+
+        // -- func --
+        /* ref */const split = tool.splitStr
+
+        /**
+         * 生成一个可用于表示DOM的注释内容元素以用于标记
+         * @param {string} notes 注释内容
+         */
+        const makeNote = (...notes) => `<!-- [render] ${notes.join('')} -->` 
+        
+        /**
+         * 替换标签为指定内容, 接受一个`handler`函数, 该函数会传入对应标签的内容, 用于处理每个匹配的字符
+         * 
+         * 将会匹配形如 `{{ [name] }}` 的内容
+         * @param {string} org_text 原始内容
+         * @param {(tag_cont: string) => string} handler 会传入对应标签的内容, 处理对应标签的内容; 传入的函数预期返回一个处理后的string
+         * @returns {String} 处理后的内容
+         */
+        const replaceTag = (org_text, handler) => {
+            let result = org_text
+            return result.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, args) => {
+                return handler(args)
+            })
+        }
+
+        /**
+         * 替换标签为对应映射的值或默认值
+         * @param {string} org_text 原始内容
+         * @param {TextMap} map 映射到内容
+         */
+        const mappingText = (org_text, map) => {
+            const handler = (tag_name) => {
+                const param = split(tag_name, '=', 2)
+                const key = param[0].trim()
+                // {{ [key] = [normal] }}
+                //    ^^ GET
+                const normal = param[1]
+                // {{ [key] = [normal] }}
+                //            ^^ GET
+                const cont = map[key] // 通过`map`获取对应的值
+
+                // 确保对应值有效
+                switch (typeof(cont)) {
+                    // 待替换的标签有对应的有效值
+                    // '' | 'abc' | 123.456
+                    case 'string':
+                        return cont.trim()
+                    case 'number':
+                        return String(cont)
+                    
+                    // 待替换的标签没有有对应的有效值
+                    // 将会使用默认值
+                    // undefined | null | ...
+                    default:
+                        return normal ? String(normal).trim() : ''
+                }
+            }
+
+            return replaceTag(org_text, handler)
+        }
+
+        // -- exec --
+        /**模板列表 */
+        // ~(fix)缓存机制
+        const list = tool.readDir(path_template, 'name_no_ext')
+        if (list instanceof Error) return ''
+
+
+        // 渲染当前的文件
+
+        // <#[template-name]: [JSON-Text]>
+        //  ^^ #process#
+        let result = html_cont.replace(
+            /* 特别注意: 此正则表达式由AI生成 */
+            /(?<!\\)<#(.*?)(?<!\\)>/g,
+            // <#[name]>
+            // --------------------------
+            (_, tag_cont) => {
+            const args = split(tag_cont, ':', 2) // 获取参数
+            const template_name = args[0].trim()
+
+            /**传递的模板参数 (权重:1) @type {Object.<string, any>} */let template_params = {}
+            try { // 尝试解析JSON内容
+                template_params = JSON.parse(args[1])
+            } catch (e) {}
+
+            /**将渲染的keyword @type {TextMap} */ 
+            const params = Object.keys(template_params).length > 1
+                // 判断模板的keyword参数
+                // <#[name]:[JSON-text]> 
+                //  |       ^^
+                //  L (Map-Object add) *JSON-text ->* Object
+
+                ? { // true     来自模板的有keyword参数
+                    ...global_mapping,
+                    ...template_params,
+                }   // false    无参数, 无需拼接keyword
+                : global_mapping
+
+            // log.print('context args is', params)
+            
+            // 模板读取
+            // [template-name].html
+            if (!list.includes(template_name)) return '' // 如果没有该模板
+            const target = template_name + '.html'
+            let template_result = this.readHtml({filename: target, is_template: true})
+
+            
+            // 模板参数传递
+            // (in template) {{ [key-name] }}
+            //               ^^ -> value (From Map-Object)
+            // (!) 请更改新的实现方式的时候多加注意
+
+            // // old method ( - 251226)
+            // result = replaceTag(result, (args) => {
+            //     const param = split(args, '=', 2)
+            //     const key = param[0].trim()
+            //     const normal = param[1]
+            //     const cont = params[key] // ? params[key = '']
+
+            //     return `${
+            //         cont === void 0 ?
+            //             typeof(normal) === 'string' ? normal.trim() : ''
+            //         : cont
+            //     }`
+            // })
+            
+            template_result = mappingText(template_result, params)
+
+
+            // 输出
+            return [
+                makeNote(template_name, ':start'),
+                template_result,
+                makeNote(template_name, ':end')
+            ].join('')
+        })
+
+        // {{ [key] = [normal] }}
+        //  ^^ #process#
+        result = mappingText(result, global_mapping)        
+        
+        // log.debug('result cont of:', cont)
+        return result
+    }
+
     /**
      * 读取一个HTML文件的内容(在`this.path_html`中), 并按照规则替换`<REPLACE>`的内容
      * @param {Object} param0
@@ -321,115 +568,14 @@ export class HttpApp {
     readHtml({filename, is_template = false, request = {}, self_keyword = {}}) {
         const {path_html, path_template} = this
         // log.debug('readHtml in arg of', filename) // ~(fix)in arg is ok
-        
 
-        /**
-         * 生成一个可用于表示DOM的注释内容元素以用于标记
-         * @param {string} cont 注释内容
-         */
-        const makeNote = (...cont) => {
-            return `<!-- [render] ${cont.join('')} -->`
+        // 模板字符串内关键字
+        const keywords_map = {
+            path: request.url,
+            ...self_keyword
         }
 
-        // 模板字符串内关键字(权重:0)
-        const keyword = {
-            path: request.url
-        }
-
-
-        /**预渲染HTML文件 @param {string} cont */
-        const render = (cont) => {
-            // -- func --
-
-            /**
-             * 替换标签为指定内容
-             * @param {string} org_text 原始内容
-             * @param {(tag_cont: string) => string} handler 处理标签内容函数
-             */
-            const replaceTag = (org_text, handler) => {
-                let result = org_text
-                return result.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, args) => {
-                    return handler(args)
-                })
-            }
-
-            // -- exec --
-            /**模板列表 */
-            const list = tool.readDir(path_template, 'name_no_ext')
-            if (list instanceof Error) return ''
-            cont = cont.replace(/* 特别注意: 此正则表达式由AI生成 */ /(?<!\\)<#(.*?)(?<!\\)>/g, (_, tag_cont) => {
-                // <#template_name:          { key: value }>
-                //    ^模板名      ^固定为冒号     ^JSON字符串
-                //             表示模板名与数据区分
-                // 例: <#profile: {username: 'name', email: 'xxx@xx.xx'}>
-
-                // 在模板文件中
-                // <element> {{ key = value }} </element>
-                //              ^ 待替换的值会
-                //         在渲染的时候根据参数传递
-
-                /* ref */const split = tool.splitStr
-                // 预处理标签内容
-                const args = split(tag_cont, ':', 2) // 获取参数
-                const template_name = args[0].trim()
-
-                /**传递的模板参数 (权重:1) @type {Object.<string, any>} */let template_params = {}
-                try { // 尝试解析JSON内容
-                    template_params = JSON.parse(args[1])
-                } catch (e) { }
-
-                // 将渲染的keyword
-                const params = {
-                    ...self_keyword,
-                    ...template_params,
-                    ...keyword
-                }
-                
-                // 模板读取
-                if (!list.includes(template_name)) return '' // 如果没有该模板
-                const target = template_name + '.html'
-                let result = this.readHtml({filename: target, is_template: true})
-
-                // 模板参数传递
-                // result = result.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, args) => {
-                //     const param = split(args, '=', 2)
-                //     const key = param[0].trim()
-                //     const normal = param[1]
-                //     const cont = template_params[key]
-
-                //     return `${
-                //         cont === void 0 ?
-                //             typeof(normal) === 'string' ? normal.trim() : ''
-                //         : cont
-                //     }`
-                // })
-
-                // (!) 特别注意, 迁移实现的这个方法因常识性错误debug了几天(虚)才发现问题, 请更改新的实现方式的时候多加注意
-                result = replaceTag(result, (args) => {
-                    const param = split(args, '=', 2)
-                    const key = param[0].trim()
-                    const normal = param[1]
-                    const cont = params[key]
-
-                    return `${
-                        cont === void 0 ?
-                            typeof(normal) === 'string' ? normal.trim() : ''
-                        : cont
-                    }`
-                })
-                
-                
-
-                // 输出
-                return [
-                    makeNote(template_name, ':start'),
-                    result,
-                    makeNote(template_name, ':end')
-                ].join('')
-            })
-            // log.debug('result cont of:', cont)
-            return cont
-        }
+        // log.print('in', keywords_map)
 
 
         let content = '' // 初始化内容
@@ -450,7 +596,7 @@ export class HttpApp {
 
         if (!is_template) {// 预渲染非模板文件的HTML文件
             // ~(fix)
-            return render(content)
+            return this.render(content, keywords_map)
         }
 
 
@@ -460,7 +606,21 @@ export class HttpApp {
 
     /**运行这个HTTP服务 */
     run() {
-        const {host, port, expressApp} = this
+        const {host, port, expressApp, delay_start} = this
+
+        const starting = () => {
+            const server = expressApp.listen(this.port, this.host, () => {
+                log.imp(log.makeColoredText(
+                    ['Server is running on ', 'green'],
+                    [`http://${host + ':' + port}`, 'blue']
+                ))
+            })
+            this.server = server
+        }
+
+
+        // -- setting --
+
         // 未匹配到路由 
         expressApp.use((req, res) => {
             // ~(TAG)404 page
@@ -472,10 +632,16 @@ export class HttpApp {
         })
 
 
-        const server = expressApp.listen(this.port, this.host, () => {
-            log.info(`Server is running on http://${host + ':' + port}`)
-        })
-        this.server = server
+        // -- running --
+
+        if (delay_start) {
+            log.info(`Server will start in ${
+                log.makeColoredText([Math.floor(delay_start / 1000), 'blue'])
+            } seconds...`)
+            setTimeout(starting, delay_start)
+        } else {
+            starting()
+        }
 
     }
 }
@@ -491,4 +657,3 @@ export class HttpApp {
 // log.warn(Path.join(process.cwd(), '../src/html'))
 
 // log.debug(tool.xor(0, 1))
-log.req('test')

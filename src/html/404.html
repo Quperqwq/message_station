@@ -3,17 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        i {
+            font-style: normal;
+        }
+
+        main i {
+            font-weight: 600;
+            padding: 0 .2em;
+        }
+
+        footer :not(:first-child) {
+            margin-left: .3em;
+        }
+
+        footer i:not(:first-child)::before {
+            content: '|';
+        }
+        footer i:not(:first-child)::after {
+            content: ':';
+        }
+    </style>
     <title> Not Found </title>
 </head>
 <body>
-    <h1> place back to <a href="/">app</a>. </h1>
+    <h1> Not Found! </h1>
     <hr>
-    <p> The page is not found the server, Please check your input url. </p>
+    <main>
+        <p> Page <i id="curr-url"></i> is not found, Please check your URL. </p>
+        <p> back to <a href="/">APP</a> in <b id="count-down">5</b> seconds </p>
+    </main>
     <hr>
-    <p> <i> QUPR </i>; V <span data-is_static="true" id="text_version"></span> ; Error Code <strong id="text-error_code"> 404 </strong> </p>
-
+    <footer>
+        <i> QUPR </i> <i> Version </i> <span>{{ version = no }}</span> <i> Error Code </i> <strong id="text-error_code"> 404 </strong> 
+    </footer>
     <script>
-        
+        document.getElementById('curr-url').innerText = location.pathname
+
+        const e_count_down = document.getElementById('count-down')
+
+        let countdown = 5
+        const loop = setInterval(() => {
+            e_count_down.innerText = --countdown
+            if (countdown <= 0) {
+                window.open('/', '_self')
+                clearInterval(loop)
+            }
+        }, 1000)
     </script>
 </body>
 </html>

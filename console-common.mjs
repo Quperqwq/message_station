@@ -1,7 +1,13 @@
 import Fs, { readSync } from 'fs'
 import {tool, isType} from './tools-common.mjs'
-import Path from 'path'
 
+// -- log level --
+const LOG_LEVEL_DEBUG = 0
+const LOG_LEVEL_INFO = 1
+const LOG_LEVEL_WARN = 2
+const LOG_LEVEL_ERROR = 3
+const LOG_LEVEL_IMP = 10
+const LOG_LEVEL_REQ = 1
 
 const version = 'v250820_QUPR'
 
@@ -474,14 +480,14 @@ class TextStyle {
 }
 
 
-const textStyle = new TextStyle()
+export const textStyle = new TextStyle()
 
 /**
  * 构建一个输出日志类, 用于将日志信息输出到控制台或日志文件
  */
 class OutputLog {
     /**
-     * @typedef {{name: string, color: string | [string, string], out: function(string): void, level: number, output: function(...string): void}} LogLevelObject
+     * @typedef {{name: string, color: string | [string, string], out: function(string): void, level: number | undefined, output: function(...string): void}} LogLevelObject
      * @typedef {{ [x: number | string]: LogLevelObject}} LogLevelObjects 日志对象
      */
     /**
@@ -498,35 +504,41 @@ class OutputLog {
      */
     _level = {
         content: {
-            3: {
+            [LOG_LEVEL_IMP]: {
+                name: 'IMP ',
+                color: 'yellow',
+                out: (c) => console.log(c),
+                // level: 10,
+            },
+            [LOG_LEVEL_ERROR]: {
                 name: 'ERROR',
                 color: 'red',
                 out: (c) => { console.error(c) },
-                level: 3
+                // level: 3
             },
-            2: {
+            [LOG_LEVEL_WARN]: {
                 name: 'WARN',
                 color: 'yellow',
                 out: (c) => { console.warn(c) },
-                level: 2
+                // level: 2
             },
-            1: {
+            [LOG_LEVEL_INFO]: {
                 name: 'INFO',
                 color: '',
                 out: (c) => { console.info(c) },
-                level: 1
+                // level: 1
             },
-            0: {
+            [LOG_LEVEL_DEBUG]: {
                 name: 'DEBUG',
                 color: 'gray',
                 out: (c) => { console.debug(c) },
-                level: 0
+                // level: 0
             },
             'req': {
                 name: 'Request',
                 color: 'blue',
                 out: (c) => { console.log(c) },
-                level: 1
+                level: LOG_LEVEL_REQ
             }
         },
         'alias': {
@@ -559,6 +571,8 @@ class OutputLog {
             Fs.mkdirSync(log_path)
         }
 
+        // ~(last)实现filter
+
 
 
         // -- init values -- start
@@ -589,45 +603,56 @@ class OutputLog {
         const { _level } = this
 
         const level_alias = _level['alias']
-        const result_level = {
-            ..._level.content,
-        }
+        // const result_levels = {
+        //     ..._level.content,
+        // }
+        const result_levels = _level.content
 
         // 对每个日志等级进行处理
-        Object.keys(result_level).forEach((level_name) => {
-            const level = result_level[level_name]
-            const { color, name, level: level_of } = level
-            level.color = textStyle.getFontColorCode(color)
-            level.output = this.makeOutputFunction({
-                level: level_of,
+        // --------------------------------------------------------
+        // name:    该等级的名称                xxx [name] content
+        // color:   该等级在控制台渲染的颜色    [...] (color)
+        // out:     输出方法                    (c) => [method]
+        // 
+        Object.keys(result_levels).forEach((level) => {
+            const curr = result_levels[level]
+            const { color, name } = curr
+            curr.color = textStyle.getFontColorCode(color)
+
+            // 将预处理参数进行处理
+            // 修改后将影响直接调用外露方法(如 this.print this.info)输出行为
+            curr.output = this.makeOutputFunction({
+                level: +level || curr.level || -1,
                 use_header: true,
                 print_full_time: true,
                 header_cont: name,
                 header_style: ['[', ']'],
-                header_color_code: level.color,
-                type: 'log'
+                header_color_code: curr.color,  // 打印颜色
+                type: 'log'                     // 对应日志的类型, 或用于过滤日志内容
             })
             // console.log(level);
             // console.log('function of', level.output.toString());
             
 
-            result_level[level_name] = level
+            result_levels[level] = curr
         })
 
         // 将别名转换为实际的日志等级
         Object.keys(level_alias).forEach((alias) => {
             const proxy_name = level_alias[alias]
-            const proxy = result_level[proxy_name]
+            const proxy = result_levels[proxy_name]
             if (!proxy) return
-            result_level[alias] = proxy
+            result_levels[alias] = proxy
         })
 
         /**
          * 日志等级对象
          * @type {LogLevelObjects}
          */
-        this.level = result_level
+        this.level = result_levels
 
+        // console.log(result_levels);
+        
     }
 
 
@@ -662,7 +687,7 @@ class OutputLog {
 
         // level & type
         level = 0,
-        type = 'default',
+        type = 'default', // ~(TAG)指定type
 
         // switch
         print_full_time = false,
@@ -693,6 +718,10 @@ class OutputLog {
             header_len = header.length
 
             if (print_full_time) header_len += 26
+
+            if (subheader_cont) {
+                header += ` ${subheader_color_code}${subheader_cont}${subheader_color_code ? TextStyle.style_reset : ''} `
+            }
 
             // set color
             if (this.use_color) {
@@ -730,6 +759,10 @@ class OutputLog {
             this.print(compose(...cont))
         }
     }
+    
+    // switch mode - method
+
+    setOutputFilter() {}
 
 
     /**
@@ -823,14 +856,14 @@ class OutputLog {
         level_obj.output(...cont)
     }
     
-
+    imp(...cont) { this.output(LOG_LEVEL_IMP, ...cont) }
     error(...cont) {
         this.output(3, ...cont)
         return new Error(cont)
     }
-    warn(...cont) { this.output(2, ...cont) }
-    info(...cont) { this.output(1, ...cont) }
-    debug(...cont) { this.output(0, ...cont) }
+    warn(...cont) { this.output(LOG_LEVEL_WARN, ...cont) }
+    info(...cont) { this.output(LOG_LEVEL_INFO, ...cont) }
+    debug(...cont) { this.output(LOG_LEVEL_DEBUG, ...cont) }
     /**直接打印值 */
     obj(...value) { console.log(...value) }
     hr(cont = '_') {
@@ -940,14 +973,16 @@ class OutputLog {
 }
 
 
-class ModuleLog {
+export class ModuleLog {
     // ~(last)打印应用信息
     constructor(module_name = 'Default') {
         this.output = log.makeOutputFunction({
             'header_cont': module_name,
             'header_style': ['<', '>'],
             'print_full_time': true,
-            'header_color_code': this.MakeFont.getColorCode('green'),
+            'header_color_code': textStyle.getColorCode('green'),
+            'subheader_cont': 'test level',
+            'subheader_color_code': textStyle.getColorCode('gray')
         })
 
     }
@@ -955,13 +990,12 @@ class ModuleLog {
 
 }
 
-const log = new OutputLog({
+export const log = new OutputLog({
     // 在这里配置输出策略
     show_level: 0
 })
 
 
-export default log
 
 
 // test code here...
