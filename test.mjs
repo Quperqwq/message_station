@@ -2,7 +2,7 @@
  * test here
  */
 
-import {log, ModuleLog} from './console-common.mjs'
+import {log, ModuleLog, textStyle} from './console-common.mjs'
 import {tool, isType} from './tools-common.mjs'
 // const obj = {test: 'ok'}
 
@@ -72,11 +72,20 @@ const obj = {
 // const appLog = new ModuleLog('MyApp')
 // log.req('aaa')
 
-// 指定标签与默认标签
-const timer = tool.Timer
 
-const label = timer.start()
-console.log('normal label', timer.end(label))
-// 性能差10倍
-const label_2 = timer.start('0')
-console.log('assign label', timer.end(label_2));
+
+
+// // 指定标签与默认标签
+// const timer = tool.Timer
+
+// const label = timer.start()
+// console.log('normal label', timer.end(label))
+// // 性能差10倍
+// const label_2 = timer.start('0')
+// console.log('assign label', timer.end(label_2));
+
+
+log.print(textStyle.processTypesetTextConfig({
+    'margin_lr': 10,
+    'margin_left': 5
+}))

@@ -6,8 +6,8 @@ const LOG_LEVEL_DEBUG = 0
 const LOG_LEVEL_INFO = 1
 const LOG_LEVEL_WARN = 2
 const LOG_LEVEL_ERROR = 3
-const LOG_LEVEL_IMP = 10
-const LOG_LEVEL_REQ = 1
+const LOG_LEVEL_IMP = 99
+const LOG_LEVEL_REQ = 22
 
 const version = 'v250820_QUPR'
 
@@ -24,8 +24,38 @@ const print = tool.print.bind(tool)
 
 /**
  * 用于创建文本样式
- * @typedef {'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | 'gray' | 'normal' | 'unset'} FontColor
+ * @typedef {'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | 'gray' | 'normal' | 'unset'} Colors
  */
+
+
+/**
+ * @typedef {[text: string, font_color: Colors, background_color: Colors]} TextColorConfig 彩色字体配置
+ */
+
+/** 
+ * @template [ T_NumberExist = undefined | number ]
+ * @typedef {Object} TextTypesetConfig 文本排版配置对象
+ * @property {T_NumberExist} padding_left 左间距
+ * @property {T_NumberExist} padding_right 右间距
+ * @property {T_NumberExist} padding_top 上间距
+ * @property {T_NumberExist} padding_bottom 下间距
+ * @property {T_NumberExist} padding_lr 左右间距
+ * @property {T_NumberExist} padding_tb 上下间距
+ * 
+ * @property {T_NumberExist} margin_left 左距离
+ * @property {T_NumberExist} margin_right 右距离
+ * @property {T_NumberExist} margin_top 上距离
+ * @property {T_NumberExist} margin_bottom 下距离
+ * @property {T_NumberExist} margin_lr 左右距离
+ * @property {T_NumberExist} margin_tb 上下距离
+ * 
+ * @property {T_NumberExist} curr_indent 当前缩进大小
+ * @property {Boolean} [center] 居中
+ * 
+ * @typedef {[TextColorConfig | string, void | TextTypesetConfig]} TextStyleConfig 字体综合配置
+ */
+
+
 class TextStyle {
     /**
      * 创建一个文本效果
@@ -102,16 +132,42 @@ class TextStyle {
 
     /**objectToFormatText 允许的数据类型 */
     ott_supported_type = ['array', 'object']
+
+    /**默认的文本排版配置对象 @type {TextTypesetConfig<number>} */
+    #default_typeset_config = {
+        center: false,
+        curr_indent: 0,
+
+        padding_left: 0,
+        padding_right: 0,
+        padding_top: 0,
+        padding_bottom: 0,
+        padding_lr: 0,
+        padding_tb: 0,
+
+        margin_left: 0,
+        margin_right: 0,
+        margin_top: 0,
+        margin_bottom: 0,
+        margin_lr: 0,
+        margin_tb: 0,
+        
+    }
     
     /**
-     * @typedef {[FontColor, FontColor]} ColorConfigArray 字体颜色配置数组
-     * @typedef {FontColor | ColorConfigArray} ColorConfig 字体颜色配置
+     * @typedef {[font_color: Colors, back_color: Colors]} ColorConfigArray 字体颜色配置数组
+     * @typedef {Colors | ColorConfigArray} ColorConfig 字体颜色配置
      */
+
+
+
+    // -- color --
+
     /**
-     * 创建一个有颜色的文本
+     * 创建一个能被控制台响应彩色字体的对象
      * @param {string} text 
      * @param {ColorConfig} color
-     * @param {FontColor} background_color 背景颜色描述词(从 `this.background_colors` 中获取)
+     * @param {Colors} background_color 背景颜色描述词(从 `this.background_colors` 中获取)
      */
     createTextColor(text, color = 'unset', background_color = 'unset', { use_space = false } = {}) {
         let curr_text = text
@@ -147,7 +203,7 @@ class TextStyle {
 
     /**
      * 获取字体颜色ansi代码
-     * @param {FontColor} color_name 
+     * @param {Colors} color_name 
      */
     getFontColorCode(color_name) {
         return TextStyle.font_colors[color_name] || TextStyle.font_colors.normal
@@ -155,8 +211,8 @@ class TextStyle {
 
     /**
      * 获取ansi颜色代码, 支持背景颜色
-     * @param {FontColor | [FontColor, FontColor]} color 字体颜色描述词(从 `this.font_colors` 中获取); 若指定为数组, 则第一个元素为字体颜色, 第二个元素为背景颜色
-     * @param {FontColor} background_color 背景颜色描述词(从 `this.background_colors` 中获取)
+     * @param {Colors | [Colors, Colors]} color 字体颜色描述词(从 `this.font_colors` 中获取); 若指定为数组, 则第一个元素为字体颜色, 第二个元素为背景颜色
+     * @param {Colors} background_color 背景颜色描述词(从 `this.background_colors` 中获取)
      * 
     */
     getColorCode(color, background_color = 'unset') {
@@ -181,12 +237,123 @@ class TextStyle {
 
     /**
      * 获取背景颜色的ansi代码
-     * @param {FontColor} color_name 
+     * @param {Colors} color_name 
      */
     getBackColorCode(color_name) {
         return TextStyle.background_colors[color_name] || TextStyle.background_colors.normal
     }
-    
+
+
+
+    //  * @param {string | TextColorConfig} text_setter 文本颜色配置(`TextColorConfig`)对象或文本(`string`); 若指定`string`将会默认原色
+    //  * @param {TextTypesetConfig} param1 字体配置对象
+
+    // -- typeset --
+    /**
+     * 处理排版配置, 转换为合法对象
+     * @param {TextTypesetConfig} text_config 
+     * @returns {TextTypesetConfig<number>}
+     */
+    processTypesetTextConfig(text_config) {
+        const default_config = this.#default_typeset_config
+        Object.keys(default_config).forEach((key) => {
+            text_config[key] ||= default_config[key] ?? void 0
+            const value = text_config[key]
+
+            // 值默认或无效时不进行下一步
+            if (!value) return
+
+            // 将复合值转换为对应值
+            // [ margin / padding ]_[ lr / tb ] -> [ margin / padding ]_[ left / right / top ... ]
+            switch (key) {
+                case 'margin_lr':
+                    text_config.margin_left ||= value
+                    text_config.margin_right ||= value
+                    break
+                case 'margin_tb':
+                    text_config.margin_top ||= value
+                    text_config.margin_bottom ||= value
+                    break
+                case 'padding_lr':
+                    text_config.padding_left ||= value
+                    text_config.padding_right ||= value
+                    break
+                case 'padding_tb':
+                    text_config.padding_top ||= value
+                    text_config.padding_bottom ||= value
+                    break
+            }
+
+            return
+        })
+
+        return text_config
+    }
+
+    /**
+     * 创建一个排版后可以在控制台输出的文本
+     * @param {...TextStyleConfig} text_configs
+     */
+    createStyleTexts(...text_configs) {
+        /**
+         * 每一行的每一节内容
+         * @type {string[][]}
+         * ```js
+         * [
+         *  ['content 1', 'content 2'],                 // line 1
+         *  ['content 1', 'content 2', 'content 3'],    // line 2
+         *  // and more lines ...
+         * ]
+         * ```
+         */
+        const lines = [[]]
+
+        /**
+         * 往`lines`内插入一节内容
+         * ```text
+         * [
+         *  [
+         *    'content x', <here>
+         *  ],
+         *  [
+         *    'content x', <here>
+         *  ],
+         * ]
+         * ```
+         * @param {string[]} contents 
+         */
+        const insetContent = (contents) => {
+            contents.forEach((text, curr_line) => {
+                // 确保二维数组已初始化
+                lines[curr_line] ||= []
+
+                // 插入当前内容
+                lines[curr_line].push(text)
+            })
+        }
+        
+        // 处理每个文本配置
+        //    行   |节1        |节2        |节3
+        // ------------------------------------------
+        // line 1: content 1  | content 2 | content 3
+        // line 2: content 1  | content 2 | content 3
+        // line 3: content 1  | content 2 | content 3
+        // and more line...
+        //
+        // padding: 包含背景颜色的间隙
+        // margin: 不含背景颜色的间隙
+        // center: 使最终内容居中(`lines`)
+        //
+        text_configs.forEach((text_config) => {
+            /**当前节的内容 @type {string[]} */
+            const curr_content = []
+            const color_config = text_config[0]
+            const typeset_config = this.processTypesetTextConfig(text_config[1])
+            // ~(last)继续完成字体排版处理方法
+        })
+    }
+
+
 
 
     // wrapper
@@ -498,14 +665,14 @@ class OutputLog {
      *  },
      *  alias: {
      *      [x: string]: string | [string, string]
-     *  }
+     *  } | undefined
      * }}
      * ~(TAG)输出对象预处理
      */
     _level = {
         content: {
             [LOG_LEVEL_IMP]: {
-                name: 'IMP ',
+                name: 'MAIN',
                 color: 'yellow',
                 out: (c) => console.log(c),
                 // level: 10,
@@ -534,20 +701,20 @@ class OutputLog {
                 out: (c) => { console.debug(c) },
                 // level: 0
             },
-            'req': {
+            [LOG_LEVEL_REQ]: {
                 name: 'Request',
                 color: 'blue',
                 out: (c) => { console.log(c) },
-                level: LOG_LEVEL_REQ
+                // level: LOG_LEVEL_REQ
             }
         },
-        'alias': {
-            error: 3,
-            warn: 2,
-            info: 1,
-            debug: 0,
-            '-1': 'req'
-        }
+        // 'alias': {
+        //     error: 3,
+        //     warn: 2,
+        //     info: 1,
+        //     debug: 0,
+        //     '-1': 'req'
+        // }
     }
 
 
@@ -602,7 +769,7 @@ class OutputLog {
         // ~(TAG)输出对象预处理
         const { _level } = this
 
-        const level_alias = _level['alias']
+        // const level_alias = _level['alias']
         // const result_levels = {
         //     ..._level.content,
         // }
@@ -623,10 +790,10 @@ class OutputLog {
             // 修改后将影响直接调用外露方法(如 this.print this.info)输出行为
             curr.output = this.makeOutputFunction({
                 level: +level || curr.level || -1,
-                use_header: true,
-                print_full_time: true,
-                header_cont: name,
-                header_style: ['[', ']'],
+                use_header: true,               // 使用头部标签样式
+                print_full_time: true,          // 打印完整时间
+                header_cont: name,              // 头部标签名
+                header_style: ['[', ']'],       // 指定头部标签样式
                 header_color_code: curr.color,  // 打印颜色
                 type: 'log'                     // 对应日志的类型, 或用于过滤日志内容
             })
@@ -638,12 +805,12 @@ class OutputLog {
         })
 
         // 将别名转换为实际的日志等级
-        Object.keys(level_alias).forEach((alias) => {
-            const proxy_name = level_alias[alias]
-            const proxy = result_levels[proxy_name]
-            if (!proxy) return
-            result_levels[alias] = proxy
-        })
+        // Object.keys(level_alias).forEach((alias) => {
+        //     const proxy_name = level_alias[alias]
+        //     const proxy = result_levels[proxy_name]
+        //     if (!proxy) return
+        //     result_levels[alias] = proxy
+        // })
 
         /**
          * 日志等级对象
@@ -651,7 +818,8 @@ class OutputLog {
          */
         this.level = result_levels
 
-        // console.log(result_levels);
+
+        // console.log('output handler', result_levels);
         
     }
 
@@ -695,7 +863,7 @@ class OutputLog {
         use_value_detail = false
     }) {
         // 未到达日志等级不输出
-        // console.log(`${this.level_log} > ${level}`, this.level_log > level);
+        // [output level limit] > level => not output
         if (this.level_log > level) return () => {}
 
         let header_len = 0
@@ -789,60 +957,6 @@ class OutputLog {
     }
 
 
-    // 日志输出部分
-    // /**
-    //  * 输出日志
-    //  * @param {number | string} level 输出日志等级
-    //  * @param {...string} content 输出日志内容
-    //  * 
-    //  * @returns {string} 待打印的内容
-    //  */
-    // output(level, ...content) {
-    //     this.printDate() // 打印当前时间
-    //     const cont = content.map((value) => { // 将参数归一化为字符
-    //         return this.toStr(value)
-    //     }).join(' ')
-
-
-            
-
-    //     // ~(ADD)待完全实现
-    //     // const level_obj = level === -1 ? this.level['req'] : this.level[level]
-    //     // create header
-    //     const level_obj = this.level[level]
-    //     let header = ''
-    //     header += `[${
-    //         typeof(level_obj?.name) === 'string' ?
-    //         level_obj.name : 'unknown'
-    //     }]`
-    //     const header_len = header.length
-
-    //     // set color
-    //     if (this.use_color) {
-    //         header = colorText.composeTextColor(header, level_obj?.color)
-    //     }
-        
-    //     // compose
-    //     let text = `${header} ${cont}`
-        
-    //     text = text.replaceAll('\n', `\n${' '.repeat(header_len)}`)
-
-    //     if (level_obj) {
-    //         level_obj.out(text)
-    //     }
-        
-
-
-    //     if (this.use_write && level >= this.level_write) {
-    //         // ~(ADD)目标格式 log_path[ <date>.log, ... ]
-    //         // ~(TAG)日志文件写入
-    //         // ~(TEMP)
-    //         tool.writeFile(Path.join(this.log_path, 'running.log'), text + '\n', true)
-            
-    //     }
-
-    // }
-
     /**
      * 输出日志
      * @param {number | string} level 输出日志等级
@@ -852,8 +966,10 @@ class OutputLog {
      */
     output(level, ...cont) {
         const level_obj = this.level[level]
+
+        // console.log('curr output handler', level_obj)
         
-        level_obj.output(...cont)
+        level_obj?.output(...cont)
     }
     
     imp(...cont) { this.output(LOG_LEVEL_IMP, ...cont) }
@@ -876,7 +992,7 @@ class OutputLog {
      */
     req(req) {
         let cont = `${req.method} ${req.path}`
-        this.output(-1, cont)
+        this.output(LOG_LEVEL_REQ, cont)
     }
     /**普通的输出模式 */
     print(...cont) {
@@ -889,12 +1005,9 @@ class OutputLog {
         if (this.level_log > level) return
         this.print(...cont)
     }
-
-
     /**
      * 在控制台打印彩色字体
-     * @typedef {[[text: string], [font_color: string], [background_color]]} ColorTextConfig 彩色字体配置
-     * @param  {...ColorTextConfig} text_configs 颜色配置
+     * @param  {...TextColorConfig} text_configs 颜色配置
      */
     printColored(...text_configs) {
         const colored_text = this.makeColoredText(...text_configs)
@@ -949,8 +1062,8 @@ class OutputLog {
     // }
 
     /**
-     * 配置输出彩色字体
-     * @param  {...ColorTextConfig | string} text_configs 
+     * 获取一个处理后可以在控制台输出的彩色字体对象
+     * @param {...TextColorConfig | string} text_configs 
      */
     makeColoredText(...text_configs) {
         // ~(TODO)实现彩色文本输出
@@ -969,6 +1082,13 @@ class OutputLog {
         })
 
         return result
+    }
+
+    /**
+     * 获取一个处理后可以在控制台输出的排版后字体对象
+     * @param {...TextStyleConfig} text_configs
+     */
+    makeTypesetText(...text_configs) {
     }
 }
 
@@ -1008,10 +1128,10 @@ log.printColored(
     [' loaded ', 'white', 'green'],
     ' ',
     [import.meta.url, 'gray'],
-    '\n    L ',
-    ['available output level methods of:', 'green'],
-    '\n    L ',
-    Object.keys(log.level).join(', ')
+    // '\n    L ',
+    // ['available output level methods of:', 'green'],
+    // '\n    L ',
+    // Object.keys(log.level).join(', ')
 )
 
 // log.info(tool.Timer.end('t'))

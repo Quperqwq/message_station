@@ -9,7 +9,7 @@ import {tool} from './tools-common.mjs'
 import {log} from './console-common.mjs'
 
 
-const global = {
+const meta = {
     version: '251228',
 }
 
@@ -88,7 +88,6 @@ export class HttpApp {
         this.path_static = static_path
 
         
-        // ~(last)预设参数: 生成时间;
         /**keyword映射上下文 */
         this.render_mapping_context = render_mapping_context
 
@@ -106,7 +105,7 @@ export class HttpApp {
                 const cookie = this._getCookie(req.headers.cookie)
                 if (cookie.get('developers', false)) log.det('is developers')
                 
-                next()
+                return next()
             })
         }
 
@@ -173,7 +172,7 @@ export class HttpApp {
             cache(template_path, this.cont_template, this.list_template)
 
         } else { // 但有时使用者也无需缓存
-            // ~(fork of no cache)
+            // fork no cache
         }
 
         
@@ -193,13 +192,13 @@ export class HttpApp {
                     res_body.message = message
                     res_body.det_message = det_message
                 }
-                res.send(res_body).end()
+                return res.send(res_body).end()
             }
 
             /**请求体 @type {ApiReqBody} */
             const req_body = req.body
             if (!req_body) {
-                endReq('bad_request')
+                return endReq('bad_request')
             }
             /**响应体 @type {ApiResBody} */
             let res_body = {} // 初始化响应体
@@ -214,6 +213,7 @@ export class HttpApp {
             // 正常的执行处理函数
             execute(req_body, res_body, endReq)
         })
+        
 
         // 自动映射页面路由
         if (use_auto_page) {
@@ -314,7 +314,7 @@ export class HttpApp {
                 return res.status(500).send('Server Error! File Not Found.').end()
             }
             
-            res.send(content).end()
+            return res.send(content).end()
         })
     }
 
@@ -403,8 +403,10 @@ export class HttpApp {
             // 当权重小时, 相同的字段会被权重较大的覆盖
             // -----------
             // 权重 ↑小
+            /**渲染时间 */
             create_time: tool.time,
-            render_version: global.version,
+            /** */
+            render_version: meta.version,
             ...render_mapping_context, // 全局上下文
 
             ...keywords_map,           // 调用函数传入的
@@ -627,8 +629,9 @@ export class HttpApp {
             res.status(404)
             if (req.method === 'GET') {
                 log.det('not fond')
-                res.send(this.readHtml({filename: '404.html', request: req}))
+                return res.send(this.readHtml({filename: '404.html', request: req}))
             }
+            
         })
 
 
