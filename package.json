@@ -10,7 +10,7 @@
   },
   "author": "QUPR",
   "license": "ISC",
-  "dependencies": {
+  "dependencies": {ls
     "express": "^5.1.0",
     "nodemon": "^3.1.10"
   }

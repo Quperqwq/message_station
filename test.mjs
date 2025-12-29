@@ -2,7 +2,7 @@
  * test here
  */
 
-import {log, ModuleLog, textStyle} from './console-common.mjs'
+import {log, ModuleLog, textStyle, print, printValues} from './console-common.mjs'
 import {tool, isType} from './tools-common.mjs'
 // const obj = {test: 'ok'}
 
@@ -85,7 +85,19 @@ const obj = {
 // console.log('assign label', timer.end(label_2));
 
 
-log.print(textStyle.processTypesetTextConfig({
-    'margin_lr': 10,
-    'margin_left': 5
-}))
+// log.print(textStyle.processTypesetTextConfig({
+//     'margin_lr': 10,
+//     'margin_left': 5
+// }))
+
+tool.Timer.start('print-use-time')
+// log.plain(
+//     log.MakeFont.valueToFormatText(
+//         'aaa',
+//         {
+//             'use_detail': true
+//         }
+//     )
+// )
+log.print(obj)
+console.log('print use', tool.Timer.end('print-use-time'), 'ms')
