@@ -108,6 +108,8 @@ class TextStyle {
         unset: '',
     }
 
+    //  @type {{[x: string]: [color_name: Colors]}}
+    // ~(last)对应class的颜色
     /**值对应的字体颜色 */
     static type_colors_map = {
         string: 'green',
@@ -115,13 +117,20 @@ class TextStyle {
         boolean: 'blue',
         null: 'yellow',
         undefined: 'gray',
-        object: 'magenta',
+        object: 'yellow',
         array: 'cyan',
         function: 'magenta'
     }
 
+    // static warp_colors_map = {
+
+    // }
+
     /**复杂值类型 */
     static complex_value_type = ['object', 'array'] 
+
+    /**objectToFormatText 允许的数据类型 */
+    ott_supported_type = ['array', 'object']
     
     /**简单值类型 */
     static simple_value_type = ['string', 'boolean', 'number', 'null', 'function']
@@ -129,8 +138,6 @@ class TextStyle {
     /**一元类型 */
     static unary_value_type = ['null', 'undefined']
 
-    /**objectToFormatText 允许的数据类型 */
-    ott_supported_type = ['array', 'object']
 
     /**默认的文本排版配置对象 @type {TextTypesetConfig<number>} */
     #default_typeset_config = {
@@ -178,15 +185,15 @@ class TextStyle {
     /**
      * 尝试从缓存中获取彩色字体, 若不存在将会自动生成并加入缓存
      * @param {string} text 
-     * @param {ColorConfigArray} color
+     * @param {ColorConfigArray} font_color
      */
-    getTextColor(text, color = ['unset', 'unset']) {
-        const color_index = `${text}_${color.join('_')}`
+    getTextColor(text, font_color = 'unset', background_color = 'unset') {
+        const color_index = `${text}_${font_color}_${background_color}`
         const cache = this.char_cache[color_index]
 
         if (cache) return cache
 
-        const result = this.createTextColor(text, color)
+        const result = this.createTextColor(text, font_color, background_color)
         this.char_cache[color_index] = result
         return result
     }
@@ -464,10 +471,14 @@ class TextStyle {
      * @property {boolean} use_indent 控制是否使用行缩进, 若指定为否将忽略`indent_*`的一切配置
      * @property {string} space_style 留空样式
      * @property {string} indent_style 缩进样式
-     * @property {boolean} use_colored 是否启用颜色渲染
-     * @property {boolean} use_detail 是否启用值详细描述
+     * @property {boolean} [use_colored=true] 是否启用颜色渲染
+     * @property {boolean} [use_detail=true] 是否启用值详细描述
+     * @property {string} [_curr_type] 当前处理对象的类型
+     * @property {Colors} [_curr_color] 当前处理对象类型对应的颜色
      * @property {number} _nesting 当前函数递归的深度
      * @property {boolean} _in_object 当前值是否在Object内; 如果是, 那么将不会显示普通值详情 
+     * @property {string[]} [detail_warp_style=['<', '>']] 显示对象详细信息时包裹的样式
+     * @property {Colors} [detail_warp_color='gray'] 显示对象详细信息时的颜色
      */
 
     /**
@@ -476,8 +487,16 @@ class TextStyle {
      * @param {ValueFormatConfig} format_context 
      */
     objectToFormatText(obj, format_context = {}) {
+        // like:
+        // {x: 1, y: 2}
+        // 
+        // {
+        //      x: 1,
+        //      y: 2
+        // }
+
         // step.init - 此处不直接在传参部分使用解构, 因在出现递归情况(对象内有对象)这些参数需要传递以实现统一的输出行为; 此format_config可以理解为上下文
-        const { _nesting = 1, use_indent = true, indent_style = '   ' } = format_context
+        const { _nesting = 1, use_indent = true, indent_style = '   ', _curr_color = 'yellow' } = format_context
 
 
         // step.init - function
@@ -503,12 +522,12 @@ class TextStyle {
         // step.1 - 计算样式
         // 固有字符样式
         const char = {
-            '{': is_array ? this.getTextColor('[', ['blue']) : this.getTextColor('{', ['yellow']),
-            '}': is_array ? this.getTextColor(']', ['blue']) : this.getTextColor('}', ['yellow']),
+            start: is_array ? this.getTextColor('[', 'blue') : this.getTextColor('{', _curr_color),
+            end: is_array ? this.getTextColor(']', 'blue') : this.getTextColor('}', _curr_color),
             // '[': this.getTextColor('[', ['blue']),
             // ']': this.getTextColor(']', ['blue']),
-            ',': this.getTextColor(',', ['gray']),
-            ':': this.getTextColor(':', ['gray']),
+            ',': this.getTextColor(',', 'gray'),
+            ':': this.getTextColor(':', 'gray'),
         }
 
         // 缩进样式
@@ -529,7 +548,7 @@ class TextStyle {
 
 
         // step.end - 组合并返回结果
-        return `${char['{']}${content}${end_cont}${char['}']}`
+        return `${char.start}${content}${end_cont}${char.end}`
     }
 
 
@@ -538,9 +557,15 @@ class TextStyle {
 
     }
 
-    valueToColored() {
-
-    }
+    // /**
+    //  * 自动匹配值类型并渲染颜色
+    //  * @param {any} value 
+    //  * @returns {string}
+    //  */
+    // valueToColored(value) {
+    //     const { type_colors_map } = TextStyle
+    //     return this.createTextColor(type_colors_map[typeof(value)] || '')
+    // }
 
     /**
      * 对任意值进行指定操作
@@ -559,11 +584,20 @@ class TextStyle {
      * @returns 
      */
     valueToFormatText(value, format_context = {}) {
+        // 该函数因涉及到深度遍历对象内容, 所以可能在处理`Object`时会递归调用
         // 
         // string, number, ...  简单类型直接渲染颜色后输出
         // Array, Object, ...   复杂类型将会深度遍历所有值并计算输出
         // 
-        const { show_type_detail = true, use_colored = true, use_detail = false, _nesting = 0, _in_object = false } = format_context
+        const {
+            show_type_detail = true,
+            // ~(last)use this
+            use_colored = true,
+            use_detail = false, _nesting = 0,
+            _in_object = false,
+            detail_warp_style = ['<', '>'],
+            detail_warp_color = 'gray'
+        } = format_context
 
         const { type_colors_map: value_colors } = TextStyle
 
@@ -571,20 +605,25 @@ class TextStyle {
             if (curr_type === 'string' && !(_in_object || use_detail)) return curr_value
 
             // 初始化
+            /**对象类型对应的颜色 @type {Colors} */
             const curr_color = value_colors[curr_type] || 'normal'
             const curr_text = String(curr_value)
             let result = ''
             let detail = {}
 
             // 通过类型渲染颜色
+            // 判断是否为复杂对象(将会二次处理后输出)
             if (TextStyle.complex_value_type.includes(curr_type) && this.ott_supported_type.includes(curr_type)) {
                 // 处理对象
                 const nesting = _nesting + 1
                 
+                // 将对象转换为待输出的样式
                 result = this.objectToFormatText(value, {
                     ...format_context,
                     _in_object: true,
-                    _nesting: nesting
+                    _nesting: nesting,
+                    // _curr_type: curr_type,
+                    _curr_color: curr_color
                 })
 
             } else {
@@ -615,13 +654,19 @@ class TextStyle {
                         // ~(last)输出string时带单引号, 并进行内容转义(' -> \')
                         detail.length = value.length
                         break
+                        
                     default:
                         break
                 }
 
-                const detail_text = Object.keys(detail).length ? '<' + this.objectToLineText(detail) + '> ' : ' '
+                // 将对象详细内容转换为最终格式
+                const detail_text = Object.keys(detail).length ?
+                `${detail_warp_style[0]}${this.objectToLineText(detail)}${detail_warp_style[1]}`   // like     <length: 1, ...>
+                : ''                      // no detail content
 
-                result = `${this.createTextColor(curr_type + detail_text, 'gray')}${result}`
+                result = `${this.createTextColor(`${curr_type}${detail_text}`, 'white', 'gray')} ${result}`
+            } else {
+                result = this.createTextColor(`${value}`, curr_color)
             }
             return result
         })

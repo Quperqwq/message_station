@@ -37,6 +37,7 @@ const obj = {
     nl: null,
     bt: true,
     bf: false,
+    ar: [1, 2, 3],
     class: {
         error: new Error('test')
     }
@@ -99,5 +100,7 @@ tool.Timer.start('print-use-time')
 //         }
 //     )
 // )
-log.print(obj)
+// log.print(obj)
+// log.plain(log.MakeFont.objectToFormatText(obj)) // fix it
+log.plain(log.MakeFont.objectToFormatText(obj, {use_indent: false}))
 console.log('print use', tool.Timer.end('print-use-time'), 'ms')
