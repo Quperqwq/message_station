@@ -23,6 +23,10 @@
         footer i:not(:first-child)::after {
             content: ':';
         }
+
+        #go-back.hidden {
+            opacity: 0;
+        }
     </style>
     <title> Not Found </title>
 </head>
@@ -31,7 +35,8 @@
     <hr>
     <main>
         <p> Page <i id="curr-url"></i> is not found, Please check your URL. </p>
-        <p> back to <a href="/">APP</a> in <b id="count-down">5</b> seconds </p>
+        <p id="go-back"> back to <a href="/">APP</a> in <b id="count-down">5</b> seconds </p>
+        <p> <strong onclick="cancelBack()">cancel back</strong> </p>
     </main>
     <hr>
     <footer>
@@ -41,15 +46,24 @@
         document.getElementById('curr-url').innerText = location.pathname
 
         const e_count_down = document.getElementById('count-down')
+        const e_back = document.getElementById('go-back')
 
         let countdown = 5
         const loop = setInterval(() => {
             e_count_down.innerText = --countdown
             if (countdown <= 0) {
                 window.open('/', '_self')
-                clearInterval(loop)
+                cancelBack()
             }
         }, 1000)
+
+
+        // on click event
+        // cancel countdown and cancel back homepage
+        function cancelBack() {
+            clearInterval(loop)
+            e_back.classList.add('hidden')
+        }
     </script>
 </body>
 </html>

@@ -348,10 +348,6 @@ export class HttpApp {
      * 
      * - 优化注释;
      * 
-     * - 继续优化日志输出代码段;
-     * - -  file://./console-common.mjs
-     * - -  1.  LOG_LEVEL_DEBUG, LOG_LEVEL_WARN, ...
-     * - -  2.  result_levels 对象内容有冗余
      * 
      * - 优化引用Timer对象的方式;
      * 

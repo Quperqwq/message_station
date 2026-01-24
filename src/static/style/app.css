@@ -1,0 +1,148 @@
+/* common */
+/* --- base --- */
+body {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+:root {
+    --qupr-main-color: #0095ff;
+    --color-main: #111;
+    --color-font: #222;
+    --color-normal: #444;
+    --color-symbol: #888;
+    --color-other: #666;
+
+    --color-back-main: #eee;
+    --color-back-normal: #ccc;
+    --color-back-symbol: #aaa;
+    --color-back-other: #888;
+
+    --color-red-main: #f00;
+    --color-red-warn: #f55;
+    --color-red-other: #f99;
+
+    --page-max-width: 600px;
+
+    --functions-card-sum: 3;
+}
+
+h1, h2, h3, h4, h5, h6, p, ul, li, ol, body {
+    color: var(--color-main);
+    margin: 0;
+    padding: 0;
+}
+
+li {
+    list-style: none;
+}
+
+
+body {
+    overflow-x: hidden;
+}
+
+/* --- main body: base --- */
+
+#app {
+    margin: 0 auto;
+}
+
+#app, #app nav {
+    max-width: var(--page-max-width);
+    min-width: 300px;
+}
+
+#main-nav {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    min-height: 4em;
+    box-shadow: 0 -.14em .4em #ddd;
+}
+
+/* --- nav --- */
+
+#main-nav .options {
+    display: flex;
+    position: absolute;
+    justify-content: space-between;
+    height: 100%;
+    width: 100%;
+}
+
+#main-nav .options .item {
+    --div-width: .1em;
+    --div-height: .8em;
+
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: border .4s ease;
+    width: 100%;
+
+    border-bottom: 0 solid #bcbcbc;
+    cursor: pointer;
+}
+
+#main-nav .options .item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    right: calc(var(--div-width) / 2 * -1);
+    width: var(--div-width);
+    height: var(--div-height);
+    background-color: var(--color-symbol);
+}
+
+#main-nav .options .item.checked {
+/* #main-nav .options .item:hover { */
+    border-bottom-width: .4em;
+    color: var(--qupr-main-color);
+    font-weight: 800;
+}
+
+/* corner icon */
+#main-nav .options .item[data-number]::after {
+    content: attr(data-number);
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    right: .8rem;
+    top: .9rem;
+    font-size: .4em;
+    font-weight: 400;
+    min-width: 1rem;
+    height: 1rem;
+    color: var(--color-back-main);
+    background-color: var(--color-red-warn);
+    border-radius: 2em;
+    /* padding: 0 .2em; */
+}
+
+#main-nav .options .item.checked[data-number]::after {
+    opacity: .3;
+} 
+
+/* --- function switcher --- */
+
+#function-switcher {
+    display: flex;
+    overflow-x: hidden;
+    width: calc(100% * var(--functions-card-sum));
+    /* height: 100%; */
+    
+    margin-left: calc(100% * (attr(data-curr-function) - 1));/* not working */
+}
+
+#function-switcher .function {
+    width: 100%;
+}
+
+/* --- media query --- */
+
+@media screen and (min-width: 600px) {
+    #app {
+        box-shadow: 0 0 2em var(--color-normal);
+    }
+}

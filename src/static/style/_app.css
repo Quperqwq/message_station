@@ -1,0 +1,37 @@
+:root {
+    --qupr-main-color: #0095ff;
+}
+
+.qupr-color {
+    color: var(--qupr-main-color);
+}
+
+.logo-title {
+    color: var(--qupr-main-color);
+}
+
+main {
+    margin-top: 2em;
+}
+
+footer {
+    margin: .2em .5em;
+    padding: .3em .5em;
+}
+
+footer .tag {
+    background-color: #e8e8e8;
+    color: #6b6b6b;
+    font-weight: 600;
+    font-style: normal;
+    border-radius: .2em;
+    padding: .125em .2em;
+}
+
+footer .tag:not(:last-child) {
+    margin-right: .2em;
+}
+
+footer .version {
+    color: #48b3ff;
+}
